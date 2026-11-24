@@ -1,7 +1,7 @@
 /* Optional Supabase cloud sync. Local tracking never depends on the SDK. */
 (() => {
 'use strict';
-const PREF='better-me-cloud-config-v1', META='better-me-cloud-meta-v1:', RECOVERY='better-me-cloud-recovery-v1';
+const PREF='better-me-cloud-config-v1', META='better-me-cloud-meta-v1:', RECOVERY='better-me-cloud-recovery-v1', OWNER='better-me-cloud-last-account-v1';
 const SDK='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js';
 let client=null, session=null, cfg=null, subscription=null, sdkPromise=null, connectPromise=null;
 let busy=false, timer=null, generation=0, blocked=false, conflict=false, lastStatus='';
@@ -16,7 +16,8 @@ const auto=()=>meta().auto===true;
 function status(s){lastStatus=s;$('cloudstatus').textContent=s;$('cloudlive').textContent=s;}
 function buttons(){
   const signed=!!session;
-  for(const k of ['cloudpush','cloudpull','cloudlogout','cloudauto'])$(k).disabled=!signed||busy;
+  for(const k of ['cloudpush','cloudpull','cloudauto'])$(k).disabled=!signed||busy||blocked;
+  $('cloudlogout').disabled=!signed||busy;
   for(const k of ['cloudlogin','cloudsignup','cloudurl','cloudkey','cloudemail'])$(k).disabled=signed||busy||!!connectPromise;
   $('cloudauto').checked=signed&&auto();
   $('cloudrecover').disabled=!readJSON(RECOVERY);
@@ -53,7 +54,11 @@ function onSession(next,owner){
   const previous=identity();session=next||null;
   if(identity()!==previous){
     generation++;conflict=false;clearTimeout(timer);
-    if(session){$('cloudemail').value=session.user.email||'';status(auto()?'Signed in — checking cloud…':'Signed in — enable auto-save or use manual backup.');schedule(0)}
+    if(session){
+      $('cloudemail').value=session.user.email||'';
+      try{const previousOwner=readJSON(OWNER);if(previousOwner!==identity()){setMeta({auto:false,base:null});writeJSON(OWNER,identity())}}catch(e){blocked=true;status('Cannot store account safety settings — cloud sync paused.');buttons();return}
+      status(auto()?'Signed in — checking cloud…':'Signed in — enable auto-save or use manual backup.');schedule(0)
+    }
     else status('Not signed in — changes stay on this device.');
   }
   buttons();
@@ -170,7 +175,7 @@ async function pull(){
     stash();
     if(!merge(remote.snapshot)){status(conflict?'Conflict remains — merge cancelled.':'Merge cancelled — local data unchanged.');return}
     if(!storageOK)throw Error('Local storage failed; export a recovery backup before continuing.');
-    setMeta({base:{rev:remote.rev,hash:remote.hash}});conflict=false;
+    setMeta({base:{rev:remote.rev,hash:remote.hash},...(conflict?{auto:false}:{})});conflict=false;
     status('Cloud backup merged locally. Review it, then upload or enable auto-save.');
   }catch(e){status('Download failed: '+(e.message||e))}
   finally{busy=false;buttons();schedule(3000)}
@@ -208,12 +213,13 @@ $('cloudrecover').onclick=()=>{
   const data=readJSON(RECOVERY);
   if(data)download('better-me-pre-sync-recovery.json',JSON.stringify(data,null,2),'application/json');
 };
+window.betterMeCanSaveLocal=()=>!blocked;
 window.betterMeCloudChanged=()=>{
   if(!session||!auto()||blocked||conflict)return;
   status(navigator.onLine?'Local changes saved — cloud sync pending.':'Offline — changes saved locally; sync resumes online.');schedule();
 };
 window.addEventListener('storage',e=>{
-  if(e.key===KEY||e.key===null){blocked=true;generation++;clearTimeout(timer);status('Another tab changed local data. Export any unsaved edits and reload this tab before cloud sync.');buttons()}
+  if(e.key===KEY||e.key===null){blocked=true;generation++;clearTimeout(timer);status('Another tab changed local data. Export any unsaved edits and reload this tab before saving.');buttons()}
 });
 window.addEventListener('offline',()=>{if(session){clearTimeout(timer);status('Offline — changes saved locally; sync resumes online.')}});
 async function restore(){
