@@ -1,6 +1,7 @@
 /* Optional Supabase cloud sync. Local tracking never depends on the SDK. */
 (() => {
 'use strict';
+const {content,reconcile}=window.BetterMeCloudCore;
 const PREF='better-me-cloud-config-v1', META='better-me-cloud-meta-v1:', RECOVERY='better-me-cloud-recovery-v1', OWNER='better-me-cloud-last-account-v1';
 const SDK='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js';
 let client=null, session=null, cfg=null, subscription=null, sdkPromise=null, connectPromise=null;
