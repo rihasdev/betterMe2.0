@@ -1,3 +1,5 @@
+(function(root){
+'use strict';
 function canonical(value){
   if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
   if(value!==null&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
@@ -35,4 +37,7 @@ async function reconcile({get,read,write,apply,hash,base,empty,alive=()=>true,al
   return written?{status:'synced',base:{rev:written,hash:local}}:{status:'conflict'};
 }
 
-if(typeof module!=='undefined'&&module.exports)module.exports={canonical,content,plan,nextRevision,reconcile};
+const api={canonical,content,plan,nextRevision,reconcile};
+if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BetterMeCloudCore=api;
+
+})(globalThis);
