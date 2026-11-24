@@ -22,7 +22,7 @@ async function reconcile({get,read,write,apply,hash,base,empty,alive=()=>true,al
   if(!alive())return {status:'cancelled'};
   const decision=plan(local,remote,base,empty);
   if(decision==='conflict')return {status:'conflict'};
-  if(await hash(get())!==local||!alive())return {status:'changed'};
+  if(content(get())!==content(snapshot)||!alive())return {status:'changed'};
   if(decision==='same')return {status:'synced',base:{rev:remote.rev,hash:local}};
   if(decision==='pull'){
     await apply(remote.snapshot);
