@@ -47,3 +47,7 @@ Run `node --test tests/cloud-core.test.cjs`. This tests the reconciliation logic
 ## Salah & Dhikr upgrade
 
 Detailed faith records are stored under each selected date in the existing version 2 backup (`days[date].faith`). No new database table or SQL migration is necessary. Update and refresh every browser/device before recording Dhikr or Sunnah progress; older versions do not understand the additional fields and could discard them. Export a JSON backup before upgrading. The 42 routine activities and their completion score are unchanged. Faith counters and the 12-Rak'ah tracker are tracked separately. The guide uses the supplied content and source references; it is not a prayer-time calculator. Tests: `node --test tests/*.test.cjs`.
+
+## Workout trackers
+
+The warm-up, strength training and cool-down entries each have an expandable tracker and a + Add exercise button. Individual exercises record name, sets, repetitions per set, weight in kg, duration, notes and completion. These optional date-specific records live at `days[date].workoutLog` in the existing JSON backup and use the original local save and Supabase sync flow. They are separate from the routine score and do not overwrite the existing manually logged workout-duration metric. Refresh all devices after deploying before recording workout details; older clients do not preserve these additional fields. No SQL change is needed.
