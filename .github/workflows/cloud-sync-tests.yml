@@ -15,4 +15,5 @@ jobs:
           node-version: '22'
       - run: node --check cloud-core.js
       - run: node --check cloud-sync.js
-      - run: node --test tests/cloud-core.test.cjs
+      - run: node --check faith.js
+      - run: node --test tests/*.test.cjs
