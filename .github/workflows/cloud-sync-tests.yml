@@ -16,4 +16,5 @@ jobs:
       - run: node --check cloud-core.js
       - run: node --check cloud-sync.js
       - run: node --check faith.js
+      - run: node --check workout.js
       - run: node --test tests/*.test.cjs
