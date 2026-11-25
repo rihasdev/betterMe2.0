@@ -51,3 +51,7 @@ Detailed faith records are stored under each selected date in the existing versi
 ## Workout trackers
 
 The warm-up, strength training and cool-down entries each have an expandable tracker and a + Add exercise button. Individual exercises record name, sets, repetitions per set, weight in kg, duration, notes and completion. These optional date-specific records live at `days[date].workoutLog` in the existing JSON backup and use the original local save and Supabase sync flow. They are separate from the routine score and do not overwrite the existing manually logged workout-duration metric. Refresh all devices after deploying before recording workout details; older clients do not preserve these additional fields. No SQL change is needed.
+
+## Fixed weekly workout split
+
+Effective for dates on or after 2026-11-25: Monday Upper Body, Tuesday Lower Body, Wednesday Rest, Thursday Push, Friday Pull, Saturday Legs, Sunday Rest. The three morning workout phase activities are scheduled on the five training days; weekday controls for these three entries reflect the fixed split. On recovery days they are excluded from the completion denominator, while optional mobility and stretching logs remain accessible. Existing recorded snapshots before the effective date and any saved workout details remain intact. The effective schedule also applies to old saved routines without a database migration. Refresh all devices after deployment. No SQL change is needed.
