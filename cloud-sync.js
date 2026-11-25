@@ -8,7 +8,7 @@ let client=null, session=null, cfg=null, subscription=null, sdkPromise=null, con
 let busy=false, timer=null, generation=0, blocked=false, conflict=false, lastStatus='';
 const readJSON=k=>{try{return JSON.parse(localStorage.getItem(k)||'null')}catch{return null}};
 const writeJSON=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const snapshot=()=>JSON.parse(JSON.stringify(state));
+const snapshot=()=>validate(JSON.parse(JSON.stringify(state)));
 const identity=()=>session&&cfg?cfg.url+'|'+session.user.id:null;
 const metaKey=()=>META+identity();
 const meta=()=>identity()?readJSON(metaKey())||{}:{};
