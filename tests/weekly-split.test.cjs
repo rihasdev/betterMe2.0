@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('node:assert/strict'),{test}=require('node:test'),fs=require('node:fs'),path=require('node:path');
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8'),inline=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const segment=inline.slice(inline.indexOf('const groups'),inline.indexOf('let state=blank()'));
+const app=new Function('window',segment+';return {defaults,schedule,effectiveTasks,weeklySplit,isRecovery,trainingDays,workoutPhases};')({});
+const phaseIds=tasks=>tasks.filter(t=>app.workoutPhases.includes(t.id)).map(t=>t.id);
+const dates=['2026-11-30','2026-12-01','2026-12-02','2026-12-03','2026-12-04','2026-12-05','2026-12-06'];
+test('exact weekly split Monday to Sunday',()=>assert.deepEqual(dates.map(d=>app.weeklySplit[new Date(d+'T12:00:00').getDay()]),['Upper Body','Lower Body','Rest','Push','Pull','Legs','Rest']));
+test('only Wednesday and Sunday are recovery days',()=>assert.deepEqual(dates.map(app.isRecovery),[false,false,true,false,false,false,true]));
+test('all three phases scheduled on training days and excluded on recovery days',()=>{assert.equal(app.defaults.length,42);for(const d of dates){const tasks=app.schedule(d,app.defaults);assert.deepEqual(phaseIds(tasks),app.isRecovery(d)?[]:app.workoutPhases);assert.equal(tasks.length,app.isRecovery(d)?39:42)}});
+test('existing saved routine with old Wednesday training and Thursday rest obeys new schedule',()=>{const old=app.defaults.map(t=>({...t,days:t.id==='0-6'?[1,2,3,5,6]:[0,1,2,3,4,5,6]}));for(const d of dates)assert.deepEqual(phaseIds(app.schedule(d,old)),app.isRecovery(d)?[]:app.workoutPhases)});
+test('existing Wednesday snapshot excludes workout from effective score without deleting old entries',()=>{const record={tasks:app.defaults,status:{'0-6':'done'},workoutLog:{'0-6':[{name:'Squat'}]}};const original=JSON.stringify(record);assert.equal(app.effectiveTasks('2026-11-25',record,app.defaults).length,39);assert.equal(JSON.stringify(record),original)});
+test('existing Thursday record gets missing strength activity without duplicates',()=>{const record={tasks:app.defaults.filter(t=>t.id!=='0-6')};const result=app.effectiveTasks('2026-11-26',record,app.defaults);assert.equal(result.length,42);assert.equal(result.filter(t=>t.id==='0-6').length,1);assert.equal(record.tasks.length,41)});
+test('historic snapshots before schedule change are untouched',()=>{const record={tasks:app.defaults.filter(t=>t.id!=='0-6')};assert.equal(app.effectiveTasks('2026-11-19',record,app.defaults),record.tasks)});
+test('recovery card retains optional mobility logging and fixed schedule controls',()=>{assert.ok(html.includes("card.append(workoutPanel(day,'0-5'),workoutPanel(day,'0-7'))"));assert.ok(html.includes("input.disabled=!!t&&workoutPhases.includes(t.id)"));new Function(inline)});
