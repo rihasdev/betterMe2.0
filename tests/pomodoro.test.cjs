@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('node:assert/strict'),{test}=require('node:test'),fs=require('node:fs'),path=require('node:path');
+const pomo=require('../pomodoro.js'),faith=require('../faith.js'),workout=require('../workout.js'),core=require('../cloud-core.js');
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8'),inline=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const segment=inline.slice(inline.indexOf('const groups'),inline.indexOf('let state=blank()'));
+const app=new Function('window','BetterMeFaith','BetterMeWorkout','BetterMePomodoro',segment+';return {blank,validate,fromV1};')({BetterMeFaith:faith,BetterMeWorkout:workout,BetterMePomodoro:pomo},faith,workout,pomo);
+const session={id:'focus-1',minutes:25,task:'Study DAX',endedAt:'2026-11-27T05:30:00.000Z'};
+test('timer uses absolute deadline and paused remainder',()=>{assert.equal(pomo.remaining({end:10000,left:2500},9001),1);assert.equal(pomo.remaining({end:10000,left:2500},11000),0);assert.equal(pomo.remaining({end:0,left:2500},11000),3)});
+test('every fourth focus session offers long break',()=>{assert.equal(pomo.nextMode('focus',1),'short');assert.equal(pomo.nextMode('focus',4),'long');assert.equal(pomo.nextMode('long',4),'focus')});
+test('history rejects invalid durations and duplicates',()=>{assert.deepEqual(pomo.clean([session,session,{...session,id:'bad',minutes:0},null]),[session])});
+test('legacy backups retain their original shape',()=>{const old=app.validate(app.fromV1({'2026-11-27':['0-1']}));assert.equal(core.content(app.validate(old)),core.content(old));assert.equal(old.days['2026-11-27'].pomodoro,undefined)});
+test('focus history survives backup validation without changing activity records',()=>{const old=app.validate(app.fromV1({'2026-11-27':['0-1']}));old.days['2026-11-27'].pomodoro=[session];old.days['2026-11-27'].priorities[0]={text:'Study DAX',done:false};assert.equal(core.content(app.validate(JSON.parse(JSON.stringify(old)))),core.content(old));});
+test('focus history participates in cloud comparison',()=>{const old=app.validate(app.fromV1({'2026-11-27':[]}));const next=JSON.parse(JSON.stringify(old));next.days['2026-11-27'].pomodoro=[session];assert.notEqual(core.content(old),core.content(app.validate(next)))});
+test('HTML loads module before validation and includes save hook',()=>{assert.ok(html.indexOf('src="./pomodoro.js"')<html.indexOf('<script>'));assert.ok(html.includes('day.pomodoro=BetterMePomodoro.clean([...before,session]);save()'));for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(match[1]);});
