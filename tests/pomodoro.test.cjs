@@ -12,3 +12,15 @@ test('legacy backups retain their original shape',()=>{const old=app.validate(ap
 test('focus history survives backup validation without changing activity records',()=>{const old=app.validate(app.fromV1({'2026-11-27':['0-1']}));old.days['2026-11-27'].pomodoro=[session];old.days['2026-11-27'].priorities[0]={text:'Study DAX',done:false};assert.equal(core.content(app.validate(JSON.parse(JSON.stringify(old)))),core.content(old));});
 test('focus history participates in cloud comparison',()=>{const old=app.validate(app.fromV1({'2026-11-27':[]}));const next=JSON.parse(JSON.stringify(old));next.days['2026-11-27'].pomodoro=[session];assert.notEqual(core.content(old),core.content(app.validate(next)))});
 test('HTML loads module before validation and includes save hook',()=>{assert.ok(html.indexOf('src="./pomodoro.js"')<html.indexOf('<script>'));assert.ok(html.includes('day.pomodoro=BetterMePomodoro.clean([...before,session]);save()'));for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(match[1]);});
+
+test('mini timer uses Document Picture-in-Picture from an explicit click, shares timer controls and cleans up on close',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../pomodoro.js'),'utf8');
+ new Function(source);
+ assert.ok(source.includes('window.documentPictureInPicture.requestWindow({width:320,height:265})'));
+ assert.ok(source.includes('$("pip").onclick=$("pip-card").onclick=openMini'));
+ assert.ok(source.includes('miniNode("mini-start").onclick=toggleTimer'));
+ assert.ok(source.includes('$("start").onclick=toggleTimer'));
+ assert.ok(source.includes('w.addEventListener("pagehide",()=>closeMini(w),{once:true})'));
+ assert.ok(source.includes('w.clearInterval(pipInterval)'));
+ assert.ok(source.includes('if(!pip||pip.closed)open();status(msg)'));
+});

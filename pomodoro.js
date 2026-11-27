@@ -15,7 +15,7 @@ function localDay(time){const d=new Date(time);return [d.getFullYear(),String(d.
 function mount(api){
  const key="betterme.pomodoro.v1", defaults={focus:25,short:5,long:15,goal:8,sound:true,notify:false};
  const labels={focus:"Focus",short:"Short break",long:"Long break"};
- let cfg={...defaults},timer=null,cycle=0,storageFailed=false,audio,finishing=false;
+ let cfg={...defaults},timer=null,cycle=0,storageFailed=false,audio,finishing=false,pip=null,pipOpening=false,pipInterval=null,resetArmed=false;
  const fresh=(mode="focus",task="")=>({mode,task,id:globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+"-"+Math.random().toString(36).slice(2),minutes:cfg[mode],left:cfg[mode]*60000,end:0});
  function load(){
   try{const x=JSON.parse(localStorage.getItem(key)||"null");if(!x)return;
@@ -45,10 +45,10 @@ function mount(api){
  document.head.append(style);
  const launch=document.createElement("button");launch.id="pomo-launch";launch.type="button";launch.textContent="◷ Focus";document.querySelector("main > header > .row").prepend(launch);
  const card=document.createElement("section");card.id="pomo-card";card.className="card";
- card.innerHTML=`<div class="row spread"><div><div class="eyebrow">Focus studio</div><h2>Pomodoro tracker</h2><small id="pomo-card-sub"></small></div><button id="pomo-open" type="button" class="primary">Start focusing</button></div><div class="bar"><span id="pomo-goalbar"></span></div><small id="pomo-week"></small>`;
+ card.innerHTML=`<div class="row spread"><div><div class="eyebrow">Focus studio</div><h2>Pomodoro tracker</h2><small id="pomo-card-sub"></small></div><div class="row"><button id="pomo-pip-card" type="button">↗ Mini timer</button><button id="pomo-open" type="button" class="primary">Start focusing</button></div></div><div class="bar"><span id="pomo-goalbar"></span></div><small id="pomo-week"></small>`;
  const priorities=document.getElementById("priorities").closest(".card");priorities.after(card);
  const dialog=document.createElement("dialog");dialog.id="pomo-dialog";dialog.setAttribute("aria-labelledby","pomo-title");
- dialog.innerHTML=`<div class="stack"><div class="row spread"><div><div class="eyebrow">Better Me · Focus studio</div><h2 id="pomo-title">One task at a time</h2></div><button id="pomo-hide" type="button" aria-label="Minimize focus timer">− Minimize</button></div>
+ dialog.innerHTML=`<div class="stack"><div class="row spread"><div><div class="eyebrow">Better Me · Focus studio</div><h2 id="pomo-title">One task at a time</h2></div><div class="row"><button id="pomo-pip" type="button">↗ Always on top</button><button id="pomo-hide" type="button" aria-label="Minimize focus timer">− Minimize</button></div></div>
  <div class="pomo-modes"><button type="button" data-pomo-mode="focus">Focus</button><button type="button" data-pomo-mode="short">Short break</button><button type="button" data-pomo-mode="long">Long break</button></div>
  <label class="field">What are you focusing on?<input id="pomo-task" type="text" maxlength="160" list="pomo-priorities" placeholder="e.g. Study DAX"></label><datalist id="pomo-priorities"></datalist>
  <div class="pomo-ring" id="pomo-ring" style="--progress:0%"><div><strong id="pomo-clock" role="timer"></strong><small id="pomo-phase"></small></div></div>
@@ -58,7 +58,7 @@ function mount(api){
  document.body.append(dialog);
  const float=document.createElement("button");float.id="pomo-float";float.type="button";float.className="primary";float.hidden=true;document.body.append(float);
  function persist(){try{localStorage.setItem(key,JSON.stringify({cfg,timer,cycle}));storageFailed=false;}catch{storageFailed=true;status("Timer could not be saved on this device.");}}
- function status(msg){$("status").textContent=msg;}
+ function status(msg){$("status").textContent=msg;paintMini();}
  function open(){if(!dialog.open){const list=$("priorities");list.replaceChildren();for(const p of api.priorities()){if(!p.text.trim()||p.done)continue;const o=document.createElement("option");o.value=p.text;list.append(o);}dialog.showModal();}paint();}
  function reset(mode=timer.mode){timer=fresh(mode,timer.task);persist();paint();}
  function confirmReset(){if(timer.end&&timer.end<=Date.now()){complete();return false;}return !timer.end&&timer.left===timer.minutes*60000||confirm("Discard this unfinished timer? Completed sessions will be kept.");}
@@ -77,7 +77,7 @@ function mount(api){
    timer=fresh(nextMode(was,cycle),timer.task);persist();
    const msg=was==="focus"?"Focus complete! Take a "+labels[timer.mode].toLowerCase()+".":"Break complete. Ready to focus again?";
    beep();if(cfg.notify&&"Notification" in window&&Notification.permission==="granted"){try{new Notification("Better Me",{body:msg});}catch{}}
-   open();status(msg);
+   resetArmed=false;if(!pip||pip.closed)open();status(msg);
   }finally{finishing=false;}
  }
  let lastStats="";
@@ -87,10 +87,10 @@ function mount(api){
   $("ring").style.setProperty("--progress",Math.min(100,Math.max(0,100*(1-seconds/(timer.minutes*60))))+"%");
   $("start").textContent=timer.end?"Pause":seconds<timer.minutes*60?"Resume":"Start";$("start").disabled=!!timer.end&&seconds===0;
   $("task").disabled=!!timer.end;if(document.activeElement!==$("task"))$("task").value=timer.task;
-  $("skip").hidden=timer.mode==="focus";float.hidden=dialog.open||(!timer.end&&timer.left===timer.minutes*60000);
+  $("skip").hidden=timer.mode==="focus";float.hidden=dialog.open||!!(pip&&!pip.closed)||(!timer.end&&timer.left===timer.minutes*60000);
   float.textContent=labels[timer.mode]+" · "+display;
   for(const b of dialog.querySelectorAll("[data-pomo-mode]"))b.setAttribute("aria-pressed",String(b.dataset.pomoMode===timer.mode));
-  const logs=api.logs(localDay(now)),week=api.week(localDay(now)),selected=api.selected(),sel=api.logs(selected);
+  const logs=api.logs(localDay(now)),selected=api.selected(),week=api.week(selected),sel=api.logs(selected);
   const total=xs=>xs.reduce((a,x)=>a+x.minutes,0);
   $("card-sub").textContent=sel.length+" / "+cfg.goal+" sessions · "+total(sel)+" min · "+(selected===localDay(now)?"Today":selected);
   $("goalbar").style.width=Math.min(100,sel.length/cfg.goal*100)+"%";
@@ -99,9 +99,16 @@ function mount(api){
   $("cycle").textContent=(cycle%4)+" / 4 focus sessions toward a long break";
   const sig=JSON.stringify(logs);if(sig!==lastStats){lastStats=sig;const root=$("history");root.replaceChildren();if(!logs.length){const p=document.createElement("p");p.textContent="No completed sessions today.";root.append(p);}for(const x of [...logs].sort((a,b)=>b.endedAt.localeCompare(a.endedAt)).slice(0,15)){const p=document.createElement("p");p.textContent=(x.task||"Focus session")+" · "+x.minutes+" min · "+new Date(x.endedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});root.append(p);}}
   if(storageFailed&&!$("status").textContent)status("Timer storage unavailable.");
+  paintMini();
  }
  launch.onclick=$("open").onclick=float.onclick=open;$("hide").onclick=()=>dialog.close();dialog.addEventListener("close",paint);
- $("start").onclick=()=>{unlock();if(timer.end){timer.left=Math.max(0,timer.end-Date.now());timer.end=0;}else{timer.end=Date.now()+timer.left;}persist();status("");paint();};
+ function toggleTimer(){
+  if(timer.end&&timer.end<=Date.now()){complete();return;}
+  resetArmed=false;unlock();
+  if(timer.end){timer.left=Math.max(0,timer.end-Date.now());timer.end=0;}else{timer.end=Date.now()+timer.left;}
+  persist();status("");paint();
+ }
+ $("start").onclick=toggleTimer;
  $("reset").onclick=()=>{if(confirmReset()){reset();status("");}};
  $("skip").onclick=()=>{if(confirmReset()){reset("focus");status("Break skipped.");}};
  $("task").oninput=()=>{timer.task=$("task").value;persist();};
@@ -109,6 +116,79 @@ function mount(api){
  for(const k of ["focus","short","long","goal"]){const el=$(k);el.value=cfg[k];el.onchange=()=>{const v=Number(el.value);if(Number.isInteger(v)&&v>=1&&v<=Number(el.max)){cfg[k]=v;persist();paint();}else el.value=cfg[k];};}
  $("sound").checked=cfg.sound;$("sound").onchange=()=>{cfg.sound=$("sound").checked;unlock();persist();};
  $("notify").checked=cfg.notify;$("notify").onchange=async()=>{try{cfg.notify=$("notify").checked&&"Notification" in window&&await Notification.requestPermission()==="granted";}catch{cfg.notify=false;}$("notify").checked=cfg.notify;if(!cfg.notify)status("Browser notifications are not enabled; in-app popups still work.");persist();};
+ function miniSupported(){return typeof window.documentPictureInPicture?.requestWindow==="function";}
+ function miniNode(id){try{return pip&&!pip.closed?pip.document.getElementById(id):null;}catch{return null;}}
+ function paintMini(){
+  const clock=miniNode("mini-clock");if(!clock)return;
+  const doc=pip.document,seconds=remaining(timer);
+  const text=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+  doc.documentElement.dataset.theme=document.documentElement.dataset.theme||"light";
+  clock.textContent=text;
+  miniNode("mini-phase").textContent=labels[timer.mode];
+  miniNode("mini-task").textContent=timer.task||"One task at a time";
+  miniNode("mini-bar").style.width=Math.min(100,Math.max(0,100*(1-seconds/(timer.minutes*60))))+"%";
+  miniNode("mini-start").textContent=timer.end?"Pause":seconds<timer.minutes*60?"Resume":"Start";
+  miniNode("mini-start").disabled=!!timer.end&&seconds===0;
+  miniNode("mini-reset").textContent=resetArmed?"Confirm reset":"Reset";
+  miniNode("mini-cancel").hidden=!resetArmed;
+  miniNode("mini-skip").hidden=timer.mode==="focus";
+  miniNode("mini-status").textContent=resetArmed?"Discard this unfinished timer?":$("status").textContent;
+  const logs=api.logs(localDay(Date.now()));miniNode("mini-count").textContent=logs.length+" / "+cfg.goal+" sessions · "+logs.reduce((a,x)=>a+x.minutes,0)+" min";
+ }
+ function closeMini(w){
+  if(pip!==w)return;
+  if(pipInterval!==null){try{w.clearInterval(pipInterval);}catch{}pipInterval=null;}
+  pip=null;resetArmed=false;paint();
+ }
+ async function openMini(){
+  if(pipOpening)return;
+  if(pip&&!pip.closed){try{pip.focus();}catch{}return;}
+  if(!miniSupported()){open();status("Always-on-top mini timer is unavailable in this browser. Use the in-page timer or desktop Chrome/Edge.");return;}
+  pipOpening=true;let w;
+  try{
+   w=await window.documentPictureInPicture.requestWindow({width:320,height:265});
+   const doc=w.document;doc.title="Better Me · Focus";
+   const css=doc.createElement("style");
+   css.textContent=`
+    :root{color-scheme:light;--bg:#f4f8f4;--ink:#172c24;--muted:#50675a;--accent:#176348;--on:white;--soft:#e1ece4;--line:#cdded2}
+    :root[data-theme=dark]{color-scheme:dark;--bg:#14251c;--ink:#e8f4ec;--muted:#b4cbbd;--accent:#92d7ae;--on:#14301f;--soft:#294436;--line:#3c5a49}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.35 system-ui,sans-serif}
+    main{padding:10px 12px;display:grid;gap:7px;min-width:0}header{display:flex;align-items:center;justify-content:space-between;gap:5px}
+    .brand{font-size:10px;font-weight:750;letter-spacing:1px;color:var(--accent)}#mini-phase{font-weight:650}
+    #mini-clock{font-size:clamp(34px,16vw,56px);font-weight:750;letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1.05;text-align:center}
+    #mini-task,#mini-status,#mini-count{text-align:center;color:var(--muted);overflow-wrap:anywhere;margin:0}
+    #mini-task{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .track{height:5px;border-radius:99px;overflow:hidden;background:var(--soft)}#mini-bar{height:100%;background:var(--accent)}
+    .actions{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}button{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--soft);color:var(--ink);font:inherit;font-weight:650;cursor:pointer}
+    button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}button:disabled{opacity:.5;cursor:default}
+    #mini-start{background:var(--accent);color:var(--on);flex:1;min-width:75px}#mini-status:empty{display:none}[hidden]{display:none!important}
+   `;
+   doc.head.append(css);
+   doc.body.innerHTML='<main><header><span class="brand">BETTER ME · FOCUS</span><span id="mini-phase"></span></header><div id="mini-clock" role="timer">25:00</div><p id="mini-task"></p><div class="track"><div id="mini-bar"></div></div><div class="actions"><button id="mini-start" type="button">Start</button><button id="mini-reset" type="button">Reset</button><button id="mini-cancel" type="button" hidden>Cancel</button><button id="mini-skip" type="button" hidden>Skip break</button></div><p id="mini-status" role="status" aria-live="polite"></p><p id="mini-count"></p></main>';
+   pip=w;resetArmed=false;
+   miniNode("mini-start").onclick=toggleTimer;
+   miniNode("mini-reset").onclick=()=>{
+    if(timer.end&&timer.end<=Date.now()){complete();return;}
+    if(!resetArmed&&(timer.end||timer.left!==timer.minutes*60000)){resetArmed=true;paintMini();return;}
+    resetArmed=false;reset();status("");
+   };
+   miniNode("mini-cancel").onclick=()=>{resetArmed=false;paintMini();};
+   miniNode("mini-skip").onclick=()=>{
+    if(timer.end&&timer.end<=Date.now()){complete();return;}
+    if(timer.mode==="focus")return;
+    resetArmed=false;reset("focus");status("Break skipped.");
+   };
+   w.addEventListener("pagehide",()=>closeMini(w),{once:true});
+   if(dialog.open)dialog.close();
+   pipInterval=w.setInterval(tick,1000);
+   paint();
+  }catch{
+   if(w){try{w.close();}catch{}closeMini(w);}
+   open();status("Could not open the mini timer. Your countdown is unchanged; use the in-page timer.");
+  }finally{pipOpening=false;}
+ }
+ $("pip").onclick=$("pip-card").onclick=openMini;
+ if(!miniSupported()){$("pip").title=$("pip-card").title="Requires a browser with Document Picture-in-Picture support";}
  function tick(){complete();paint();}
  window.addEventListener("storage",e=>{if(e.key===key){load();if(!timer)timer=fresh();for(const k of ["focus","short","long","goal"])$(k).value=cfg[k];$("sound").checked=cfg.sound;$("notify").checked=cfg.notify;paint();}});
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick();});window.addEventListener("pageshow",tick);
