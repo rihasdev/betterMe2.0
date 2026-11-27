@@ -1,3 +1,4 @@
+(function(){
 "use strict";
 function clean(input){
  if(!Array.isArray(input))return [];
@@ -60,7 +61,7 @@ function mount(api){
  function status(msg){$("status").textContent=msg;}
  function open(){if(!dialog.open){const list=$("priorities");list.replaceChildren();for(const p of api.priorities()){if(!p.text.trim()||p.done)continue;const o=document.createElement("option");o.value=p.text;list.append(o);}dialog.showModal();}paint();}
  function reset(mode=timer.mode){timer=fresh(mode,timer.task);persist();paint();}
- function confirmReset(){return !timer.end&&timer.left===timer.minutes*60000||confirm("Discard this unfinished timer? Completed sessions will be kept.");}
+ function confirmReset(){if(timer.end&&timer.end<=Date.now()){complete();return false;}return !timer.end&&timer.left===timer.minutes*60000||confirm("Discard this unfinished timer? Completed sessions will be kept.");}
  function unlock(){if(!cfg.sound)return;try{const C=window.AudioContext||window.webkitAudioContext;if(C){audio??=new C();audio.resume().catch(()=>{});}}catch{}}
  function beep(){if(!cfg.sound||!audio||audio.state!=="running")return;try{for(let i=0;i<3;i++){const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+i*.22;o.frequency.value=660+i*110;g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.19);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.2);}}catch{}}
  function complete(){
@@ -115,3 +116,5 @@ function mount(api){
 }
 const BetterMePomodoro={clean,remaining,nextMode,localDay,mount};
 if(typeof module!=="undefined"&&module.exports)module.exports=BetterMePomodoro;else window.BetterMePomodoro=BetterMePomodoro;
+
+})();
