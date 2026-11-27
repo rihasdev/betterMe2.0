@@ -198,7 +198,7 @@ $('cloudauto').onchange=e=>{
   if(!session)return;
   try{
     if(e.target.checked){
-      if(!confirm('Automatically upload your complete Better Me backup, including private journal and health entries, to this Supabase account? Cloud data is protected by your project security policies.')){e.target.checked=false;return}
+      if(!confirm('Automatically upload your complete Better Me backup, including private notes, journal and health entries, to this Supabase account? Cloud data is protected by your project security policies.')){e.target.checked=false;return}
       setMeta({auto:true});status('Auto-save enabled — checking cloud…');schedule(0);
     }else{setMeta({auto:false});clearTimeout(timer);status('Auto-save disabled — local saving continues.')}
   }catch(err){status('Could not save cloud preference: '+err.message)}
@@ -207,7 +207,7 @@ $('cloudauto').onchange=e=>{
 $('cloudpush').onclick=()=>{
   if(!session)return;
   if(conflict){status('Resolve conflict with Download & merge cloud backup first.');return}
-  if(confirm('Upload your complete local backup, including private journal and health entries, to your Supabase account? A newer cloud copy will never be blindly overwritten.'))run(true);
+  if(confirm('Upload your complete local backup, including private notes, journal and health entries, to your Supabase account? A newer cloud copy will never be blindly overwritten.'))run(true);
 };
 $('cloudpull').onclick=pull;
 $('cloudrecover').onclick=()=>{
